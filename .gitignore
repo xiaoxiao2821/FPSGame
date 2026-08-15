@@ -1,0 +1,17 @@
+# 典型UE5忽略规则
+/Binaries/
+/Intermediate/
+/Saved/
+*.tmp
+*.log
+
+# Visual Studio 缓存（含被 VS 实时锁定的 .vsidx 索引文件，必须忽略）
+.vs/
+
+# 其他常见 UE 生成目录（体积大、可重建）
+DerivedDataCache/
+
+# Visual Studio / Rider 工程文件（由 GenerateProjectFiles 重建，通常不入库）
+*.sln
+*.slnx
+.idea/
