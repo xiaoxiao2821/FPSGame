@@ -1,11 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Large media / UE binary assets via Git LFS
-# -text 确保这些文件被当作二进制，绝不参与换行符归一化（否则会损坏 .uasset/.umap）
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-*.uasset filter=lfs diff=lfs merge=lfs -text
-*.umap filter=lfs diff=lfs merge=lfs -text
-*.png filter=lfs diff=lfs merge=lfs -text
-*.map filter=lfs diff=lfs merge=lfs -text
+# UE / binary assets — keep as binary, never normalize line endings (corruption risk)
+*.uasset binary
+*.umap binary
+*.png binary
+*.map binary
+*.zip binary
+*.mp4 binary
