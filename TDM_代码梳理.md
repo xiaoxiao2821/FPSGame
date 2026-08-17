@@ -1,8 +1,9 @@
 # TDM 团竞模式 — C++ 代码梳理文档
 
-> **版本**: v1.0 | **更新日期**: 2026-08-16
-> **配套文档**: `TDM_需求文档.md`(效果基准);本文档描述**实现层面**的代码结构与职责,按"类 → 函数 → 职责"组织。
+> **版本**: v1.1 | **更新日期**: 2026-08-18
+> **配套文档**: `TDM_需求文档.md`(效果基准, v1.4 最终版);本文档描述**实现层面**的代码结构与职责,按"类 → 函数 → 职责"组织。
 > **架构基调**: 全链路 **DS 服务器权威** —— 伤害/死亡/计分/重生/AI 生成只在服务器执行;客户端只做输入上报与表现;队伍/HP/武器等状态通过**属性复制 + OnRep** 同步,表现通过 **NetMulticast RPC** 广播。
+> **v1.1 补充**: 新增登录场景类(`AShooterLoginGameMode` / `AShooterLoginPlayerController`)与 DS 打包限制结论。
 
 ---
 
@@ -153,6 +154,18 @@
 
 ---
 
+## 5.5 登录场景(Variant_Shooter/ShooterLoginGameMode.* / ShooterLoginPlayerController.*)
+
+| 类 | 职责 |
+|---|---|
+| `AShooterLoginGameMode` | **纯配置**:构造函数设 `PlayerControllerClass = AShooterLoginPlayerController`。**不创建任何 UI**(GameMode::BeginPlay 只在服务器执行,客户端永远看不到——修复前登录菜单不显示的根因) |
+| `AShooterLoginPlayerController::BeginPlay()` | **客户端入口**:`IsLocalController()` 判断后创建 `BP_LoginMenu` → `AddToViewport(100)` → 切 UI 输入模式(鼠标+焦点)。默认 `LoginMenuClass = BP_LoginMenu` |
+| `UShooterLoginMenu::StartGame()` | 读取 `ServerAddress/ServerPort`(默认 127.0.0.1:7777)→ `OpenLevel(IP:Port)` 客户端 travel 连接 DS → `BP_OnLoginStarted` |
+
+> **架构要点**: 登录场景是纯客户端入口,UI 归属客户端 PC;GameMode 只做类配置。蓝图在 Lvl_Login 的 WorldSettings 设置 GameMode Override = AShooterLoginGameMode(或 BP 子类)。
+
+---
+
 ## 6. `AShooterWeapon`(武器,Variant_Shooter/Weapons/ShooterWeapon.*)
 
 | 函数 | 职责 |
@@ -197,7 +210,10 @@
 4. **`ReplicatedUsing` 属性必须同时暴露编辑器**(`EditAnywhere`/`BlueprintReadOnly`),否则 UHT 直接崩溃。
 5. **服务器端第一人称 mesh 的骨骼/socket 不可靠**(动画不复制)→ 发射起点不用服务器 socket,而是**客户端上报枪口位置**(含距离保护)。
 6. **投射物高速可能穿透**:碰撞加固 + 通道强制 Block。
-7. **对象池**:命中/超时回池而非 Destroy,复用前 `ResetMoveState/重设 Velocity/取消旧忽略`。
+7. **对象池**:命中/超时回池而非 Destroy,复用前 `ResetMoveState/重设 Velocity/取消旧忽略`(注:后续已弃用对象池,改每发新建以规避显示时序问题,见 §5 说明)。
 8. **pawn 复活双路径**:正常走 `Revive`(复用 pawn);pawn 被销毁(如蓝图)走 `OnPawnDestroyed` 重生(CharacterClass 构造兜底 + 出生点统一 FindTeamPlayerStart)。
 9. **出生点命名**:关卡实际为 `Player0`/`PlayerStartN`,解析规则 0-4 红/5-8 蓝;规范命名 Player1-8 后按 1-4/5-8。
 10. **UBA 幻影失败**:本环境构建经常"全部文件秒败",手动用 cl.exe 逐文件编译 + link.exe 链接可绕开(头文件加 UFUNCTION 后须删 `Intermediate/Build/Win64/UnrealEditor/Inc/FPS/UHT` 强制 UHT 重生成)。
+11. **客户端 PC 的 `OnPossess` 不执行**(DS 下服务器专用)→ UI 事件订阅与初始同步必须放 `SetPawn`(客户端经 ClientRestart 也会走 SetPawn)。
+12. **登录场景 UI 归属客户端**:`GameMode::BeginPlay` 只在服务器执行 → 登录菜单必须由客户端 `AShooterLoginPlayerController::BeginPlay`(IsLocalController)创建,GameMode 只配置 PlayerControllerClass。
+13. **DS 打包限制(Launcher 版引擎)**:`InstalledBuild.txt` 存在 → UBT 拒绝 `TargetType.Server`;改名后触发全量重编译且 ThirdParty 缺失必失败;`FPS.exe`(Game 目标)`-server` 无效(`IsRunningDedicatedServer` 对 UE_GAME 硬编码 false)。联机验证走编辑器 `-server` 或 Listen Server;正式 DS 需源码版引擎。

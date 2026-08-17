@@ -1,8 +1,9 @@
 # TDM 团竞模式 — 游戏需求文档
 
-> **版本**: v1.3 | **更新日期**: 2026-08-16
+> **版本**: v1.4(最终版) | **更新日期**: 2026-08-18
 > **文档原则**: 本文件是团队竞技(TDM)模式的**唯一效果基准**。后续开发/修复/评审一律以本文档为准;
 > 若实现与本文档冲突,**先确认再动手,不擅自更改**。文档本身有疑问或需变更时,先与需求方确认后更新本文档并升版本号。
+> **v1.4 变更**: 登录场景 UI 改由客户端 PlayerController 创建(不依赖服务器 GameMode,修复联网 PIE 下 UI 不显示);确认登录场景为客户端入口、DS 独立服务器打包受引擎 Launcher 版限制(详见 §8 附注)。
 
 ---
 
@@ -21,6 +22,9 @@
   - **取消配枪浮层**:不做配枪选择,玩家固定默认武器(手枪);
   - **比分栏调整**:不做左右翻转,界面改为标注"红队"/"蓝队"识别;
   - 同步实现:修复连射瞄准点不跟随(§11 限制 2 移除)、出生点改为 GameMode 坐标配置(绕开关卡流送)、新增换弹时间与换弹状态同步。
+- **v1.4 变更(最终)**:
+  - 登录场景 UI 创建逻辑从 `AShooterLoginGameMode::BeginPlay`(服务器)迁移到 **`AShooterLoginPlayerController::BeginPlay`(客户端本地控制器)**,GameMode 只负责配置 PlayerControllerClass —— 修复联网 PIE/DS 下登录菜单不显示(此前 GameMode 仅在服务器进程执行,客户端永远看不到 UI);
+  - 确认 **登录场景是纯客户端入口**:启动进 Lvl_Login 显示开始菜单,输入 IP:端口后 OpenLevel 连接 DS,不依赖服务器在登录场景提供任何逻辑。
 
 ## 2. 对局流程
 
@@ -37,6 +41,7 @@
   - **默认本机**: 不输入任何内容时默认连接本机(`127.0.0.1`)作为 DS;
   - **自定义端口**: 可在输入框填写服务器 IP:端口(或仅端口),按填写内容连接。
 - 连接成功后进入主游戏场景(`Lvl_Shooter`),显示 TDM 主菜单(进入主菜单阶段)。
+- **实现确认(v1.4)**: 登录场景为**纯客户端入口** —— UI 由客户端 `AShooterLoginPlayerController::BeginPlay`(`IsLocalController` 判断)创建并显示,`AShooterLoginGameMode` 仅负责指定 PlayerControllerClass。联网 PIE/DS 下客户端进程没有 GameMode 逻辑,因此 UI 绝不能创建在 GameMode 里(修复前登录菜单不显示)。
 
 ### 2.2 主菜单 → 准备阶段 → 对战
 
@@ -116,6 +121,11 @@
 - **登录连接(需求)**: 客户端从登录场景点击"开始游戏"→ 连接指定 DS(默认本机,可填 IP:端口)→ 登录成功后进入主游戏场景。
 - **输入冻结**: 服务器设置冻结标记并复制,客户端 UI 只负责显示。
 - **UI 归属**: 菜单/结算/HUD 全部由各客户端本地创建(DS 上服务器不建 UI);状态由服务器 RPC 驱动。
+- **附注 — DS 独立服务器打包(2026-08-17 排查结论)**:
+  - Launcher 版(非源码)引擎默认**禁止编译 `TargetType.Server`**(`InstalledBuild.txt` 存在 → UBT 抛 "Server targets are not currently supported from this engine distribution");
+  - 改名 `InstalledBuild.txt` 可放行,但会触发**全量重编译引擎**(≈2h)且 Launcher 版 ThirdParty 源码被裁剪(msdfgen/AHEasing/SSEMathFun 等缺失)→ 编译必失败;
+  - **Game 目标二进制(`FPS.exe`)无法以 `-server` 进入 DS 模式**(`IsRunningDedicatedServer()` 对 `UE_GAME` 目标硬编码返回 false,编译期决定);
+  - **结论**: 当前环境联机验证用 ①编辑器 `UnrealEditor.exe FPS.uproject -server`(开发期 DS)或 ②win 包 Listen Server(`FPS.exe "Lvl_Shooter?listen"`);正式独立 DS 部署需源码版引擎。
 
 ## 9. UI 一览
 
