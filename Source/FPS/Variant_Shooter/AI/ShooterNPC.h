@@ -37,9 +37,12 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Damage")
 	float DeferredDestructionTime = 5.0f;
 
-	/** Team byte for this character */
-	UPROPERTY(EditAnywhere, Category="Team")
-	uint8 TeamByte = 1;
+	/** Team byte for this character (replicated so every client recolors the
+	 *  mesh locally — materials are not replicated).
+	 *  Default 255 (unassigned) so the FIRST replicated value (0 or 1) always
+	 *  differs from the CDO and reliably triggers OnRep_Team on clients. */
+	UPROPERTY(EditAnywhere, ReplicatedUsing = OnRep_Team, Category="Team")
+	uint8 TeamByte = 255;
 
 	/** Actor tag to grant this character when it dies */
 	UPROPERTY(EditAnywhere, Category="Team")
@@ -66,7 +69,7 @@ protected:
 
 	/** Cone variance to apply while aiming */
 	UPROPERTY(EditAnywhere, Category="Aim")
-	float AimVarianceHalfAngle = 10.0f;
+	float AimVarianceHalfAngle = 15.0f;
 
 	/** Minimum vertical offset from the target center to apply when aiming */
 	UPROPERTY(EditAnywhere, Category="Aim")
@@ -85,13 +88,57 @@ protected:
 	/** If true, this character has already died */
 	bool bIsDead = false;
 
-	/** Deferred destruction on death timer */
+	/** True while the character is spawn-protected (TDM invincibility on respawn) */
+	bool bIsSpawnProtected = false;
+
+	/** Timer that clears spawn protection after its duration. */
+	FTimerHandle SpawnProtectionTimer;
+
+	/** Auto-fire timer: keeps firing at the weapon's refire rate while a target
+	 *  is held (the pistol is semi-auto, so StartFiring alone only fires once). */
+	FTimerHandle AutoFireTimer;
+
+	/** Auto-fire tick called by AutoFireTimer. */
+	void AutoFireTick();
+
+	/** Deferred destruction on death timer (reused for the revive countdown). */
 	FTimerHandle DeathTimer;
+
+	/** Mesh relative transform captured at spawn (restored on revive). */
+	FTransform InitialMeshTransform;
+
+	/** Mesh collision profile captured at spawn (restored on revive). */
+	FName InitialMeshCollisionProfile;
 
 public:
 
-	/** Delegate called when this NPC dies */
+	/** Delegate called when this NPC dies (legacy — TDM now reuses the pawn). */
 	FPawnDeathDelegate OnPawnDeath;
+
+	/** Returns the team ID for this character */
+	uint8 GetTeamByte() const { return TeamByte; }
+
+	/** Sets the team ID for this character (used by the TDM spawner to fill teams) */
+	void SetTeam(uint8 Team);
+
+	/** Returns true if the character is dead */
+	bool IsDead() const { return bIsDead; }
+
+	/** Grants SpawnProtectionTime seconds of invincibility. */
+	void GrantSpawnProtection(float Duration);
+
+	/** Clears spawn protection immediately. */
+	void ClearSpawnProtection();
+
+	/** Returns true while the character is spawn-protected (invincible). */
+	bool IsSpawnProtected() const { return bIsSpawnProtected; }
+
+	/** Server-only: revives this SAME pawn after the death countdown (reuse). */
+	void Revive();
+
+	/** Server->All: revive presentation (undo ragdoll, restore visibility). */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_OnRevive();
 
 protected:
 
@@ -105,6 +152,13 @@ public:
 
 	/** Handle incoming damage */
 	virtual float TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+
+	/** Replication (TeamByte so clients recolor the bot locally). */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Called on clients when the replicated team changes. */
+	UFUNCTION()
+	void OnRep_Team();
 
 public:
 
@@ -142,10 +196,15 @@ public:
 protected:
 
 	/** Called when HP is depleted and the character should die */
-	void Die();
+	void Die(AController* Killer);
 
 	/** Called after death to destroy the actor */
 	void DeferredDestruction();
+
+	/** Server->All: death presentation (ragdoll physics) on every client.
+	 *  Gameplay death (scoring, OnPawnDeath, destruction) is server-authoritative. */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_OnDeath();
 
 public:
 

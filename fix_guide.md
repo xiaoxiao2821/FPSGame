@@ -35,10 +35,10 @@ TryGetPawnOwner() → GetController() → GetControlRotation() → Pitch → Set
 ### FPSCharacter.h
 
 ```cpp
-UFUNCTION(BlueprintPure, BlueprintThreadSafe, Category="Animation")
+UFUNCTION(BlueprintPure, Category="Animation")
 float GetAimPitch() const;
 
-UFUNCTION(BlueprintPure, BlueprintThreadSafe, Category="Animation")
+UFUNCTION(BlueprintPure, Category="Animation")
 float GetAimYaw() const;
 ```
 
@@ -97,6 +97,6 @@ TryGetPawnOwner() → Cast to FPSCharacter → GetAimPitch() → Set PitchN
 
 ## 注意事项
 
-- `BlueprintThreadSafe` 标记确保函数可在 AnimBP 的动画线程中安全调用
+- `GetAimPitch/GetAimYaw` 在 controller 为空时返回 0.0f，因此 AnimBP 不会因 null 崩溃（注意：实际头文件中**未**使用 `BlueprintThreadSafe`，该说明符只能用在特定类上，用在 `UFUNCTION` 里会导致 UHT 编译失败，已在早期修复中移除）
 - 这个修复是防御性的：即使 Controller 不可用（Possess 前、NPC 未被控制、角色死亡等），AnimBP 也不会崩溃
 - 如果 `PitchN` 变量需要归一化处理（如 -1 到 1 范围），在 `Set PitchN` 节点前添加 `Normalize` 或 `MapRange` 节点

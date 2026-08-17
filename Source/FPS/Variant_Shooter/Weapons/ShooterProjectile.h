@@ -75,10 +75,40 @@ protected:
 	/** Timer to handle deferred destruction of this projectile */
 	FTimerHandle DestructionTimer;
 
+	/** True while this projectile is idle in the object pool (not simulating). */
+	bool bPooled = false;
+
+	/** Last instigator (so DeactivateToPool can release the ignore on reuse). */
+	TWeakObjectPtr<APawn> LastInstigator;
+
 public:	
 
 	/** Constructor */
 	AShooterProjectile();
+
+	/** True while this projectile is active (in the world, not pooled). */
+	bool IsActive() const { return !bPooled; }
+
+	/** Returns this projectile to the pool (server-side): stops it, hides it and
+	 *  makes it reusable instead of destroying it (avoids spawn/destroy churn). */
+	void ReturnToPool();
+
+	/** Re-activates a pooled projectile for reuse (server-side). */
+	AShooterProjectile* ActivateFromPool(const FTransform& Transform, AActor* NewOwner, APawn* NewInstigator, const FName& InNoiseTag);
+
+	/** Stops and hides this projectile so it can be reused by the pool. */
+	void DeactivateToPool();
+
+	/** Shows the projectile a short moment AFTER it was repositioned, so the
+	 *  client receives the new location before it starts rendering (avoids
+	 *  pooled bullets briefly appearing at their old spot). */
+	void RevealFromPool();
+
+	/** Timer handle for the delayed reveal after pool reuse. */
+	FTimerHandle RevealTimer;
+
+	/** True while waiting for the delayed reveal. */
+	bool bPendingReveal = false;
 
 protected:
 	
@@ -90,6 +120,19 @@ protected:
 
 	/** Handles collision */
 	virtual void NotifyHit(class UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit) override;
+
+	/** Per-frame server-side path sweep: fast projectiles (3000 cm/s) move more
+	 *  than a pawn's capsule per frame, so the physics sub-step alone can tunnel
+	 *  straight through a target. Sweeping the segment moved this frame
+	 *  guarantees the bullet always registers a hit along its path. */
+	virtual void Tick(float DeltaTime) override;
+
+	/** Last server-side position, used as the sweep origin each frame. */
+	FVector LastTraceLocation = FVector::ZeroVector;
+
+	/** Shared impact handling for the physics NotifyHit and the server's path
+	 *  sweep (snap to impact, stop, damage, multicast, hide, delayed destroy). */
+	void HandleImpact(const FHitResult& Hit, AActor* HitActor, UPrimitiveComponent* HitComp, const FVector& HitLocation, const FVector& HitNormal);
 
 protected:
 
@@ -110,5 +153,9 @@ public:
 
 	/** Sets the noise tag to use when generating AI perception noise on impact */
 	void SetNoiseTag(const FName& Tag);
+
+	/** Server->All: runs the Blueprint hit feedback on every client (presentation). */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_OnHit(const FHitResult& Hit);
 
 };

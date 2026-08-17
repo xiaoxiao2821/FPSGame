@@ -23,4 +23,9 @@ public:
 	/** Allows Blueprint to update sub-widgets with the new life total and play a damage effect on the HUD */
 	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta=(DisplayName = "Damaged"))
 	void BP_Damaged(float LifePercent);
+
+	/** Allows Blueprint to show/hide a "reloading" indicator (called when the
+	 *  weapon's replicated bIsReloading changes). */
+	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta=(DisplayName = "OnReloadStateChanged"))
+	void BP_OnReloadStateChanged(bool bReloading);
 };

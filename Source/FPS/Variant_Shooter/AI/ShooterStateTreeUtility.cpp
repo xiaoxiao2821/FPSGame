@@ -4,6 +4,7 @@
 #include "Variant_Shooter/AI/ShooterStateTreeUtility.h"
 #include "StateTreeExecutionContext.h"
 #include "ShooterNPC.h"
+#include "ShooterCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "AIController.h"
 #include "Perception/AIPerceptionComponent.h"
@@ -80,6 +81,7 @@ FText FStateTreeLineOfSightToTargetCondition::GetDescription(const FGuid& ID, FS
 
 EStateTreeRunStatus FStateTreeFaceActorTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
+	UE_LOG(LogTemp, Warning, TEXT("STTASK: FaceActor EnterState"));
 	// get the instance data
 	FInstanceDataType& InstanceData = Context.GetInstanceData(*this);
 
@@ -109,6 +111,7 @@ FText FStateTreeFaceActorTask::GetDescription(const FGuid& ID, FStateTreeDataVie
 
 EStateTreeRunStatus FStateTreeFaceLocationTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
+	UE_LOG(LogTemp, Warning, TEXT("STTASK: FaceLocation EnterState"));
 	// get the instance data
 	FInstanceDataType& InstanceData = Context.GetInstanceData(*this);
 
@@ -158,6 +161,7 @@ FText FStateTreeSetRandomFloatTask::GetDescription(const FGuid& ID, FStateTreeDa
 
 EStateTreeRunStatus FStateTreeShootAtTargetTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
+	UE_LOG(LogTemp, Warning, TEXT("STTASK: ShootAtTarget EnterState"));
 	// get the instance data
 	FInstanceDataType& InstanceData = Context.GetInstanceData(*this);
 
@@ -185,6 +189,7 @@ FText FStateTreeShootAtTargetTask::GetDescription(const FGuid& ID, FStateTreeDat
 
 EStateTreeRunStatus FStateTreeSenseEnemiesTask::EnterState(FStateTreeExecutionContext& Context, const FStateTreeTransitionResult& Transition) const
 {
+	UE_LOG(LogTemp, Warning, TEXT("STTASK: SenseEnemies EnterState"));
 	// get the instance data
 	FInstanceDataType& InstanceData = Context.GetInstanceData(*this);
 
@@ -196,6 +201,29 @@ EStateTreeRunStatus FStateTreeSenseEnemiesTask::EnterState(FStateTreeExecutionCo
 			const FStateTreeStrongExecutionContext StrongContext = WeakContext.MakeStrongExecutionContext();
 			if (FInstanceDataType* LambdaInstanceData = StrongContext.GetInstanceDataPtr<FInstanceDataType>())
 			{
+				// TEAM-BASED enemy detection: any AShooterCharacter (human OR AI
+				// bot) on the OPPOSITE team is an enemy. The old tag check only
+				// matched actors carrying the "Player" tag, so AI bots (which
+				// have no such tag) were never detected as targets.
+				if (AShooterCharacter* SensedChar = Cast<AShooterCharacter>(SensedActor))
+				{
+					const uint8 MyTeam = LambdaInstanceData->Character ? LambdaInstanceData->Character->GetTeamByte() : 255;
+					const uint8 TheirTeam = SensedChar->GetTeamByte();
+					if (TheirTeam != 255 && TheirTeam != MyTeam)
+					{
+						// set the controller's target
+						LambdaInstanceData->Controller->SetCurrentTarget(SensedActor);
+
+						// set the task output
+						LambdaInstanceData->TargetActor = SensedActor;
+
+						// broadcast the see enemy delegate
+						StrongContext.BroadcastDelegate(LambdaInstanceData->OnSeeEnemyDelegate);
+					}
+					// same team / unassigned: ignore (no self-/friendly-fire AI)
+					return;
+				}
+
 				// have we sensed the enemy directly?
 				if (SensedActor->ActorHasTag(LambdaInstanceData->SenseTag))
 				{

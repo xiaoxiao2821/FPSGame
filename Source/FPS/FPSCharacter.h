@@ -48,7 +48,7 @@ protected:
 	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
-	
+
 public:
 	AFPSCharacter();
 
@@ -59,6 +59,9 @@ protected:
 
 	/** Called from Input Actions for looking input */
 	void LookInput(const FInputActionValue& Value);
+
+	/** Local-only: keeps the first-person arms/weapon mesh pitched with the camera. */
+	virtual void Tick(float DeltaTime) override;
 
 	/** Handles aim inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
@@ -96,15 +99,29 @@ public:
 	 * Use this in AnimBP EventGraph instead of GetController() -> GetControlRotation() to avoid
 	 * runtime errors when the pawn has no controller.
 	 */
-	UFUNCTION(BlueprintPure, BlueprintThreadSafe, Category="Animation")
+	UFUNCTION(BlueprintPure, Category="Animation")
 	float GetAimPitch() const;
 
 	/**
 	 * Safely returns the aim yaw (control rotation yaw) for use in Animation Blueprints.
 	 * Returns 0.0f if the controller is not valid.
 	 */
-	UFUNCTION(BlueprintPure, BlueprintThreadSafe, Category="Animation")
+	UFUNCTION(BlueprintPure, Category="Animation")
 	float GetAimYaw() const;
+
+	/**
+	 * Safely returns the aim forward vector (control rotation's unit forward vector) for Animation Blueprints.
+	 * Replaces the fragile GetController() -> GetControlRotation() -> GetForwardVector() chain that throws
+	 * "read property ... of None" when the pawn has no controller (before possession / unpossessed).
+	 * Returns (1,0,0) when there is no controller, so any downstream dot product yields 0 (no aim) instead of crashing.
+	 */
+	UFUNCTION(BlueprintPure, Category="Animation")
+	FVector GetAimForwardVector() const;
+
+	/** Tints the third-person mesh with the team color (0 = RED, 1 = BLUE).
+	 *  Uses the Mannequin material's "Paint Tint"/"LogoTint" parameters so the
+	 *  original look is preserved, just recolored. No-op if parameters are absent. */
+	void ApplyTeamColor(uint8 Team);
 
 };
 

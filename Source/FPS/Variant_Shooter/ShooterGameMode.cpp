@@ -84,3 +84,20 @@ bool AShooterGameMode::ShouldSpawnEnemyNPCs() const
 	// only spawn enemy NPCs in single player mode
 	return NumberOfLocalPlayers < 2;
 }
+
+void AShooterGameMode::ReportKill(uint8 KillerTeam)
+{
+	// Base behavior: award the point to the killer's team.
+	// The TDM game mode overrides this to add a win condition and to filter
+	// out team-kills / suicides before scoring.
+	IncrementTeamScore(KillerTeam);
+}
+
+int32 AShooterGameMode::GetTeamScore(uint8 TeamByte) const
+{
+	if (const int32* Found = TeamScores.Find(TeamByte))
+	{
+		return *Found;
+	}
+	return 0;
+}

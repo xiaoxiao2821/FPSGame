@@ -20,17 +20,17 @@ class FPS_API AShooterGameMode : public AGameModeBase
 	
 protected:
 
-	/** Type of UI widget to spawn */
-	UPROPERTY(EditAnywhere, Category="Shooter")
-	TSubclassOf<UShooterUI> ShooterUIClass;
-
 	/** Pointer to the UI widget */
 	TObjectPtr<UShooterUI> ShooterUI;
 
 	/** Map of scores by team ID */
 	TMap<uint8, int32> TeamScores;
 
-protected:
+public:
+
+	/** Type of UI widget to spawn */
+	UPROPERTY(EditAnywhere, Category="Shooter")
+	TSubclassOf<UShooterUI> ShooterUIClass;
 
 	/** Determines how many local players should be spawned on game start */
 	UPROPERTY(EditDefaultsOnly, Category="Local Multiplayer", meta = (ClampMin = 1, ClampMax = 4))
@@ -52,6 +52,16 @@ public:
 	/** Increases the score for the given team */
 	void IncrementTeamScore(uint8 TeamByte);
 
+	/**
+	 * Called when a character is killed. KillerTeam is the team that should be
+	 * awarded the point (NOT the victim's team). Derived modes (e.g. TDM) override
+	 * this to add win conditions and to prevent team-kill / suicide scoring.
+	 */
+	virtual void ReportKill(uint8 KillerTeam);
+
+	/** Returns the current score for the given team (0 if never scored) */
+	int32 GetTeamScore(uint8 TeamByte) const;
+
 	/** Returns true if enemy NPCs should be used */
-	bool ShouldSpawnEnemyNPCs() const;
+	virtual bool ShouldSpawnEnemyNPCs() const;
 };
